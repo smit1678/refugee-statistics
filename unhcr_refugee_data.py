@@ -5,7 +5,7 @@
 # on origin country, and export out to new CSV
 ###############################################
 
-import csv, sys
+import csv, sys, json
 from itertools import groupby
 
 inFile = "data/unhcr_refugees_original.csv"
@@ -29,32 +29,49 @@ years.sort()
 
 # then group by country with itertools
 header = ['country']
+header.append('sub_region')
+header.append('region')
 header = header + years
 header.append('all')
 rows = []
 first = True
 for country, values in groupby(unhcr_sort, lambda x: x['origin_ctry']):
-    # now group by year
     row = [country]
-    yearVals = {}
-    for y in years:
-        yearVals[y] = ''
-    for year, v in groupby(sorted(values, key=lambda x: x['year']), lambda x: x['year']):
-        yearVals[year] = sum(map(lambda x: int(x['total']), v))
-    # get the sum of all elements after the first one (the country name)
-    # in this row
-    for y in years:
-        row.append(yearVals[y])
-    total = 0
-    for v in yearVals.values():
-        if v != '':
-            total = total + v
-    row.append(total)
-    rows.append(row)
+    for region, reg in groupby(values, lambda x: x['region_origin']):
+        row.append(region)
+        for subregion, sub in groupby(values, lambda x: x['sub_region_origin']):
+            row.append(subregion)
+            yearVals = {}
+            for y in years:
+                yearVals[y] = ''
+            for year, v in groupby(sorted(values, key=lambda x: x['year']), lambda x: x['year']):
+                yearVals[year] = sum(map(lambda x: int(x['total']), v))
+            for y in years:
+                row.append(yearVals[y])
+            total = 0
+            for v in yearVals.values():
+                if v != '':
+                    total = total + v
+            row.append(total)
+            rows.append(row)
+
+print header
+
+output = []
+for r in rows:
+    output.append(dict(zip(header,r)))
+#    print output
+
 # Write out to new CSV
-output = open(outFile, 'w')
-writer = csv.writer(output)
+csvOutput = open(outFile, 'w')
+writer = csv.writer(csvOutput)
 writer.writerow(header)
 for r in rows:
     writer.writerow(r)
-output.close()
+csvOutput.close()
+
+# Write out to JSON file
+writeout = json.dumps(output, sort_keys=True, indent=4)
+out = open('unhcr-statistics.json', 'wb')
+out.writelines(writeout)
+out.close()
